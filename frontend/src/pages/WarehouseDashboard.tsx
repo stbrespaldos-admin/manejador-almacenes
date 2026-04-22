@@ -1,4 +1,4 @@
-import { Package, ScanLine, Settings, Save, X, Activity } from "lucide-react";
+import { Package, ScanLine, Activity } from "lucide-react";
 import { BoxCard } from "../components/BoxCard";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,9 +10,6 @@ export function WarehouseDashboard({ warehouseId }: { warehouseId: '1' | '2' }) 
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
   const [destinationWarehouse, setDestinationWarehouse] = useState<Warehouse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
-  const [newMinStock, setNewMinStock] = useState<number>(50);
-  const [userRole, setUserRole] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,8 +19,7 @@ export function WarehouseDashboard({ warehouseId }: { warehouseId: '1' | '2' }) 
       // Get current user role
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-        setUserRole(profile?.role || 'operador');
+        await supabase.from('profiles').select('role').eq('id', session.user.id).single();
       }
 
       const name = `Almacén ${warehouseId}`;
@@ -88,7 +84,7 @@ export function WarehouseDashboard({ warehouseId }: { warehouseId: '1' | '2' }) 
     // Setup realtime subscription
     const subscription = supabase
       .channel('boxes-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'boxes' }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'boxes' }, () => {
         // Refresh boxes natively when there are changes
         loadWarehouse();
       })

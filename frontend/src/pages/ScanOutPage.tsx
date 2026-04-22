@@ -129,12 +129,12 @@ export function ScanOutPage() {
 
       // Success
       playAudio('success');
-      setLastScans((prev) => [{ raw: rawInput, status: 'success', msg: `Se extrajo de la Caja ${box.box_number}. (Quedan ${newCount} ONUs)` }, ...prev].slice(0, 5));
+      setLastScans((prev) => [{ raw: rawInput, status: 'success' as const, msg: `Se extrajo de la Caja ${box.box_number}. (Quedan ${newCount} ONUs)` }, ...prev].slice(0, 5));
 
     } catch (err: any) {
       console.error(err);
       playAudio('error');
-      setLastScans((prev) => [{ raw: rawInput, status: 'error', msg: err.message }, ...prev].slice(0, 5));
+      setLastScans((prev) => [{ raw: rawInput, status: 'error' as const, msg: err.message }, ...prev].slice(0, 5));
     } finally {
       setIsProcessing(false);
     }
