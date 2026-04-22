@@ -35,7 +35,6 @@ export function WarehouseDashboard({ warehouseId }: { warehouseId: '1' | '2' }) 
         return;
       }
       setWarehouse(wh);
-      setNewMinStock(wh.min_stock || 50);
 
       // ... rest of the logic
 

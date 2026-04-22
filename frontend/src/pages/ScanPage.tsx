@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { ScanLine, Box, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -69,7 +70,7 @@ export function ScanPage() {
       }
 
       // Generar consecutivo basado en el último insertado
-      const { data: latestOnu, error: maxConsecutiveError } = await supabase
+      const { data: latestOnu } = await supabase
         .from('onus')
         .select('consecutive')
         .order('created_at', { ascending: false })

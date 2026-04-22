@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, FormEvent } from "react";
-import { ScanLine, Box, AlertCircle, Unplug } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
+import { Box, AlertCircle, Unplug } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 

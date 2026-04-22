@@ -1,6 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Package } from 'lucide-react';
 
 export function LoginForm({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('');
