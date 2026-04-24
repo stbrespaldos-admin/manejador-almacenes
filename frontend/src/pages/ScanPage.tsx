@@ -38,7 +38,7 @@ const playAudio = (type: 'success' | 'error') => {
 export function ScanPage() {
   const [inputValue, setInputValue] = useState("");
   const [selectedModel, setSelectedModel] = useState("ZTE");
-  const [lastScans, setLastScans] = useState<{ raw: string; status: 'success' | 'error'; msg: string }[]>([]);
+  const [lastScans, setLastScans] = useState<{ raw: string; status: 'success' | 'error'; msg: string; boxId?: string; boxNumber?: number }[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -64,9 +64,24 @@ export function ScanPage() {
       // 1. Serial es el único dato escaneado
       const serial = rawInput;
 
-      // Validación rápida en memoria (para no esperar a la base de datos si recién se escaneó)
+      // Validación rápida en memoria
       if (lastScans.some(scan => scan.raw === serial && scan.status === 'success')) {
         throw new Error(`Precaución: El serial ${serial} ya fue registrado correctamente hace un momento.`);
+      }
+
+      // VALIDACIÓN DE MAC vs SERIAL
+      // Una MAC suele tener 12 caracteres hex. Un serial de ZTE suele empezar por 'ZTEG'
+      // Si el modelo es ZTE y no empieza por ZTEG, avisar.
+      if (selectedModel === 'ZTE' && !serial.toUpperCase().startsWith('ZTEG')) {
+        if (!confirm(`El serial "${serial}" no parece ser un serial de ZTE (debería empezar con ZTEG). ¿Deseas registrarlo de todos modos?`)) {
+          return;
+        }
+      }
+
+      // Si parece una MAC (12 caracteres hex sin el prefijo esperado)
+      const macRegex = /^[0-9A-Fa-f]{12}$/;
+      if (macRegex.test(serial) && selectedModel === 'ZTE' && !serial.toUpperCase().startsWith('ZTEG')) {
+         throw new Error(`Error: Parece que escaneaste la MAC (${serial}) en lugar del Serial. Verifica el código de barras.`);
       }
 
       // Generar consecutivo basado en el último insertado
@@ -150,12 +165,76 @@ export function ScanPage() {
 
       // Success
       playAudio('success');
-      setLastScans((prev) => [{ raw: rawInput, status: 'success' as const, msg: `Se guardó en Caja ${targetBox.box_number} (${newCount}/20)` }, ...prev].slice(0, 5));
+      setLastScans((prev) => [
+        { 
+          raw: rawInput, 
+          status: 'success' as const, 
+          msg: `Se guardó en Caja ${targetBox.box_number} (${newCount}/20)`,
+          boxId: targetBox.id,
+          boxNumber: targetBox.box_number
+        }, 
+        ...prev
+      ].slice(0, 5));
 
     } catch (err: any) {
       console.error(err);
       playAudio('error');
       setLastScans((prev) => [{ raw: rawInput, status: 'error' as const, msg: err.message }, ...prev].slice(0, 5));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDelete = async (serial: string, boxId: string, boxNumber: number) => {
+    if (!confirm(`¿Estás seguro de que deseas eliminar el registro de la ONU ${serial} de la Caja ${boxNumber}? Esta acción corregirá los contadores.`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      // 1. Obtener datos actuales de la caja
+      const { data: box, error: boxError } = await supabase
+        .from('boxes')
+        .select('current_onu_count')
+        .eq('id', boxId)
+        .single();
+
+      if (boxError || !box) throw new Error("No se pudo encontrar la caja para actualizar.");
+
+      // 2. Borrar la ONU
+      const { error: delError } = await supabase
+        .from('onus')
+        .delete()
+        .eq('serial', serial);
+
+      if (delError) throw new Error("Error al borrar la ONU de la base de datos.");
+
+      // 3. Actualizar la caja (restar 1)
+      const newCount = Math.max(0, box.current_onu_count - 1);
+      const newStatus = newCount === 0 ? 'empty' : 'partial';
+
+      const { error: updateError } = await supabase
+        .from('boxes')
+        .update({ current_onu_count: newCount, status: newStatus })
+        .eq('id', boxId);
+
+      if (updateError) throw new Error("Error al actualizar el contador de la caja.");
+
+      // 4. Registrar movimiento de ajuste (opcional pero recomendado)
+      await supabase.from('movements').insert([{
+        type: 'ajuste',
+        box_id: boxId,
+        quantity: -1,
+        // user_id se maneja por RLS o trigger si es posible
+      }]);
+
+      // 5. Actualizar estado local
+      setLastScans(prev => prev.filter(s => s.raw !== serial));
+      alert("Registro eliminado y caja actualizada correctamente.");
+
+    } catch (err: any) {
+      console.error(err);
+      alert("Error al eliminar: " + err.message);
     } finally {
       setIsProcessing(false);
     }
@@ -247,9 +326,22 @@ export function ScanPage() {
                     </span>
                   )}
                 </div>
-                <span className={`text-xs ${scan.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                  {scan.msg}
-                </span>
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex flex-col">
+                    <span className={`text-xs ${scan.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                      {scan.msg}
+                    </span>
+                  </div>
+                  {scan.status === 'success' && scan.boxId && (
+                    <button 
+                      onClick={() => handleDelete(scan.raw, scan.boxId!, scan.boxNumber!)}
+                      disabled={isProcessing}
+                      className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded hover:bg-red-200 transition-colors font-bold uppercase"
+                    >
+                      Borrar
+                    </button>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
